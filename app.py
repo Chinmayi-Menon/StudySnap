@@ -52,14 +52,12 @@ def get_twilio_client(account_sid, auth_token):
     return TwilioClient(account_sid, auth_token)
 
 
-if not GEMINI_API_KEY:
-    st.error(
-        "StudySnap needs GEMINI_API_KEY. Add it to "
-        ".streamlit/secrets.toml, then restart the app."
+gemini_client = get_gemini_client(GEMINI_API_KEY) if GEMINI_API_KEY else None
+if gemini_client is None:
+    st.info(
+        "StudySnap is in offline mode. Add GEMINI_API_KEY in the app's "
+        "Secrets settings to enable AI tutoring."
     )
-    st.stop()
-
-gemini_client = get_gemini_client(GEMINI_API_KEY)
 
 
 # -----------------------------
@@ -130,6 +128,9 @@ def fallback_contents(extra_parts=None):
 
 def ask_gemini(parts, append_request_on_fallback=False):
     st.session_state.gemini_error = None
+    if gemini_client is None:
+        st.session_state.gemini_error = "credentials"
+        return None
     if st.session_state.get("gemini_quota_exhausted"):
         st.session_state.gemini_error = "quota"
         return None
@@ -151,6 +152,13 @@ def ask_gemini(parts, append_request_on_fallback=False):
             return None
 
     try:
+        if st.session_state.get("chat") is None:
+            st.session_state.chat = gemini_client.chats.create(
+                model=MODEL_NAME,
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_PROMPT
+                ),
+            )
         response = st.session_state.chat.send_message(parts)
         if not response.text:
             st.session_state.gemini_error = "empty"
@@ -190,6 +198,10 @@ def generate_study_summary():
     st.session_state.summary_is_local = False
     if st.session_state.get("gemini_quota_exhausted"):
         st.session_state.gemini_error = "quota"
+        st.session_state.summary_is_local = True
+        return build_local_study_summary()
+    if gemini_client is None:
+        st.session_state.gemini_error = "credentials"
         st.session_state.summary_is_local = True
         return build_local_study_summary()
     try:
@@ -275,9 +287,10 @@ def show_gemini_error(default_message):
             "increased. Saved conversation summaries and WhatsApp drafts still work."
         )
     elif error_kind == "credentials":
-        st.error(
-            f"{default_message} Check that GEMINI_API_KEY in "
-            ".streamlit/secrets.toml is valid and enabled."
+        st.info(
+            "Gemini tutoring is not configured. Add GEMINI_API_KEY to "
+            ".streamlit/secrets.toml locally or to the deployed app's Secrets "
+            "settings. Local summaries and built-in study notes are available."
         )
     elif error_kind == "network":
         st.error(
@@ -432,11 +445,15 @@ if "onboarded" not in st.session_state:
         else:
             try:
                 normalize_whatsapp_number(whatsapp_number)
-                chat = gemini_client.chats.create(
-                    model=MODEL_NAME,
-                    config=types.GenerateContentConfig(
-                        system_instruction=SYSTEM_PROMPT
-                    ),
+                chat = (
+                    gemini_client.chats.create(
+                        model=MODEL_NAME,
+                        config=types.GenerateContentConfig(
+                            system_instruction=SYSTEM_PROMPT
+                        ),
+                    )
+                    if gemini_client is not None
+                    else None
                 )
                 st.session_state.name = name.strip()
                 st.session_state.whatsapp_number = whatsapp_number.strip()
@@ -479,8 +496,8 @@ if "study_summary" in st.session_state:
     st.markdown("#### Study-session summary")
     if st.session_state.get("summary_is_local"):
         st.info(
-            "Gemini's quota is exhausted, so this summary was prepared from "
-            "your saved conversation."
+            "Gemini isn't available, so this summary was prepared from your "
+            "saved conversation."
         )
     st.write(summary)
     send_col, draft_col = st.columns(2)
@@ -605,7 +622,7 @@ if user_input:
             offline_answer = offline_study_answer(text)
             if offline_answer:
                 st.info(
-                    "Gemini is temporarily busy. Showing a built-in study "
+                    "Gemini is unavailable. Showing a built-in study "
                     "note for this topic."
                 )
                 add_message("assistant", "text", offline_answer)

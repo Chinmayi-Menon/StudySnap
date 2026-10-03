@@ -48,8 +48,9 @@ your own credentials. The real `secrets.toml` is excluded by `.gitignore`.
 
 ### Gemini
 
-Create a Gemini API key in Google AI Studio and set `GEMINI_API_KEY`. StudySnap
-requires this key to start.
+Create a Gemini API key in Google AI Studio and set `GEMINI_API_KEY` for AI
+tutoring. Without the key, StudySnap still starts in offline mode with saved-chat
+summaries and a small set of built-in study notes.
 
 ### Optional Twilio WhatsApp sending
 
@@ -85,7 +86,8 @@ Open the local URL printed by Streamlit, usually `http://localhost:8501`.
    choose **Create app**.
 3. Select the repository and branch, set the app file to `app.py`, and choose
    Python 3.13 in advanced settings.
-4. Add `GEMINI_API_KEY` in the app's **Secrets** settings. Do not paste the
+4. Add `GEMINI_API_KEY` in the app's **Secrets** settings to enable AI
+   tutoring. Without it the app still runs in offline mode. Do not paste the
    local secrets file into GitHub. Add Twilio keys only if automatic Twilio
    sending is configured; WhatsApp draft links need no Twilio credentials.
 5. Deploy. Community Cloud installs packages listed in `requirements.txt`.
